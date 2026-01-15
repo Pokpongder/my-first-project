@@ -1,7 +1,9 @@
 /* Navbar Styles */
+/* Navbar Styles */
 #navbar {
     height: 50px;
-    background-color: #333;
+    background-color: rgba(0, 0, 0, 0.164);
+    /* 50% transparent black */
     color: white;
     display: flex;
     justify-content: space-between;
@@ -14,11 +16,21 @@
     z-index: 1000;
     /* Ensure it stays above map */
     box-sizing: border-box;
+    /* Text shadow for better visibility on map */
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .nav-brand {
     font-size: 20px;
     font-weight: bold;
+    display: flex;
+    align-items: center;
+}
+
+.nav-brand img {
+    height: 40px;
+    /* Adjust as needed */
+    margin-right: 10px;
 }
 
 .nav-links a,
@@ -31,6 +43,7 @@
     margin-left: 20px;
     cursor: pointer;
     font-family: inherit;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .nav-links a:hover,
@@ -54,6 +67,8 @@
     z-index: 1001;
     max-height: 300px;
     overflow-y: auto;
+    text-shadow: none;
+    /* Reset text shadow for dropdown */
 }
 
 .dropdown-content a {
@@ -78,12 +93,14 @@
 
 /* Adjust map to fit below navbar */
 #map {
-    height: calc(100vh - 50px);
-    /* Subtract navbar height */
+    height: 100vh;
+    /* Full screen height */
+    /* Subtract navbar height - removed */
     width: 100%;
     background-color: #f0f0f0;
-    margin-top: 50px;
-    /* Push map down */
+    margin-top: 0;
+    /* Map goes to top */
+    /* Push map down - removed */
 }
 
 /* ... existing styles ... */
@@ -133,5 +150,54 @@ body {
 
 .station-data-list li a:hover {
     background-color: #e0e0e0;
+    color: #000;
+}
+
+/* Sidebar Styles */
+.sidebar {
+    height: calc(100vh - 50px);
+    /* Full height minus navbar */
+    width: 0;
+    /* Initially hidden */
+    position: fixed;
+    z-index: 1002;
+    /* Above map and dropdowns but below navbar if needed? Actually navbar is 1000, dropdown 1001. Let's make sidebar 1002 */
+    top: 50px;
+    right: 0;
+    background-color: white;
+    overflow-x: hidden;
+    transition: 0.3s;
+    /* Smooth transition */
+    box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar.open {
+    width: 30%;
+    /* Requested 30% width */
+}
+
+/* Ensure sidebar takes decent width on mobile */
+@media screen and (max-width: 768px) {
+    .sidebar.open {
+        width: 80%;
+    }
+}
+
+.sidebar-content {
+    padding: 20px;
+}
+
+.close-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 30px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #888;
+}
+
+.close-btn:hover {
     color: #000;
 }

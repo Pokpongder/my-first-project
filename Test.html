@@ -14,7 +14,10 @@
 <body>
 
     <nav id="navbar">
-        <div class="nav-brand">GNSS Map</div>
+        <div class="nav-brand">
+            <img src="image/cropped-CEGS-1.png" alt="Logo">
+            GNSS Observation
+        </div>
         <div class="nav-links">
             <div class="dropdown">
                 <button id="stations-btn">Stations &#9662;</button>
@@ -27,6 +30,13 @@
     </nav>
 
     <div id="map"></div>
+
+    <div id="sidebar" class="sidebar">
+        <button id="close-sidebar" class="close-btn">&times;</button>
+        <div id="sidebar-content" class="sidebar-content">
+            <!-- Content will be injected here -->
+        </div>
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
