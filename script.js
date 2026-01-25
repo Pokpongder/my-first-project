@@ -32,16 +32,16 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
 
 // 3. ข้อมูลสถานี
 var stations = [
-    { name: "CM01", code: "CMU1", lat: 18.8000, lon: 98.9500 },
+    { name: "CHMA", code: "CHMA", lat: 18.8000, lon: 98.9500 },
     { name: "CADT", code: "CADT", lat: 11.6545, lon: 104.9116 },
-    { name: "KMIT", code: "KMIT", lat: 13.7278, lon: 100.7724 },
+    { name: "KMI6", code: "KMI6", lat: 13.7278, lon: 100.7724 },
     { name: "STFD", code: "STFD", lat: 13.7356, lon: 100.6611 },
     { name: "RUTI", code: "RUTI", lat: 14.9889, lon: 102.1206 },
     { name: "CPN1", code: "CPN1", lat: 10.7247, lon: 99.3744 },
     { name: "NUO2", code: "NUO2", lat: 17.9383, lon: 102.6261 },
     { name: "AER1", code: "AER1", lat: 13.6945, lon: 100.7608 },
     { name: "ITC0", code: "ITC0", lat: 11.5705, lon: 104.8994 },
-    { name: "HUE0", code: "HUE0", lat: 16.4155, lon: 107.5687 },
+    { name: "HUEV", code: "HUEV", lat: 16.4155, lon: 107.5687 },
     { name: "KKU0", code: "KKU0", lat: 16.4721, lon: 102.8260 }
 
 ];
@@ -60,17 +60,70 @@ var sidebarContent = document.getElementById('sidebar-content');
 
 function openSidebar(s) {
     sidebarContent.innerHTML = `
-        <h3>${s.name} (${s.code})</h3>
+        <h3>${s.name} (${s.code}) <span id="status-dot-${s.code}" class="status-dot"></span></h3>
         <p class="station-coords">Lat: ${s.lat.toFixed(4)}, Lon: ${s.lon.toFixed(4)}</p>
         <ul class="station-data-list">
-            <li><a href="#">1. Heliosphere</a></li>
-            <li><a href="#">2. Geospace</a></li>
-            <li><a href="#">3. Ionosphere</a></li>
-            <li><a href="#">4. Aerosol Optical Depth (AOD)</a></li>
+            <li>
+                <a href="#" onclick="toggleIonosphere(event)">1. Ionosphere &#9662;</a>
+                <div id="ionosphere-content" class="accordion-content">
+                    <br>
+                     <img src="http://localhost:8000/api/latest-image/${s.name}" alt="${s.name} View" class="station-image" onclick="openLightbox(this.src)" onerror="this.parentElement.style.display='none'">
+                </div>
+            </li>
         </ul>
     `;
     sidebar.classList.add('open');
+    checkStationStatus(s.name, s.code);
 }
+
+function checkStationStatus(stationName, stationCode) {
+    var dot = document.getElementById('status-dot-' + stationCode);
+    if (!dot) return;
+
+    // ใช้ IP แทน localhost ถ้าจะเปิดจากเครื่องอื่น
+    var url = `http://localhost:8000/api/latest-image/${stationName}`;
+
+    fetch(url, { method: 'GET' })
+        .then(response => {
+            // 1. กรณีหาไฟล์ไม่เจอ (404 Not Found)
+            if (!response.ok) {
+                dot.classList.add('status-red'); // 🔴 แดง: ไม่มีไฟล์
+                return;
+            }
+
+            // 2. กรณีเจอไฟล์ (200 OK) 
+            var lastModified = response.headers.get('Last-Modified');
+            if (lastModified) {
+                var fileDate = new Date(lastModified);
+                var now = new Date();
+
+                // เปรียบเทียบแค่วัน/เดือน/ปี (ตัดเวลาทิ้ง)
+                if (fileDate.toDateString() === now.toDateString()) {
+                    dot.classList.add('status-green'); // 🟢 เขียว: ปกติ (มาวันนี้)
+                } else {
+                    dot.classList.add('status-orange'); // 🟠 ส้ม: ข้อมูลเก่า (ไม่อัปเดต)
+                }
+            } else {
+                dot.classList.add('status-green');
+            }
+        })
+        .catch(error => {
+            // 3. กรณีเน็ตหลุด หรือ Server ดับ (จุดที่ต้องแก้!)
+            console.error('Network Error:', error);
+            dot.classList.add('status-red'); //  แดง: เชื่อมต่อไม่ได้
+        });
+}
+
+// Function to toggle Ionosphere section
+window.toggleIonosphere = function (e) {
+    e.preventDefault();
+    var content = document.getElementById('ionosphere-content');
+    if (content.style.maxHeight) {
+        content.style.maxHeight = null;
+    } else {
+        content.style.maxHeight = content.scrollHeight + "px";
+    }
+};
 
 function closeSidebar() {
     sidebar.classList.remove('open');
@@ -119,14 +172,46 @@ stationsBtn.onclick = function () {
     stationsList.classList.toggle('show');
 };
 
-// ปิด Dropdown เมื่อคลิกที่อื่น
-window.onclick = function (event) {
+
+
+// 6. Lightbox Functions
+var lightbox = document.getElementById('lightbox');
+var lightboxImg = document.getElementById('lightbox-img');
+var captionText = document.getElementById('caption');
+var closeLightboxBtn = document.getElementsByClassName("close-lightbox")[0];
+
+window.openLightbox = function (src) {
+    lightbox.style.display = "block";
+    lightboxImg.src = src;
+    // captionText.innerHTML = src.split('/').pop(); // Optional: Show filename
+}
+
+window.closeLightbox = function () {
+    lightbox.style.display = "none";
+}
+
+// Close when clicking X
+if (closeLightboxBtn) {
+    closeLightboxBtn.onclick = function () {
+        closeLightbox();
+    }
+}
+
+// Close when clicking outside the image
+
+
+// Better way: use addEventListener for the previous window click too, or just append logic here.
+// Let's rewrite the window click handler to handle both.
+document.addEventListener('click', function (event) {
+    // Handle Dropdown close
     if (!event.target.matches('#stations-btn')) {
         if (stationsList.classList.contains('show')) {
             stationsList.classList.remove('show');
         }
     }
-    // Also close sidebar if clicking on map? Maybe not requested but good UX.
-    // For now, adhere to explicit close button or requirement. 
-    // Actually typically clicking on map closes stuff, but let's stick to close button for now.
-};
+
+    // Handle Lightbox close (if clicking background)
+    if (event.target == lightbox) {
+        closeLightbox();
+    }
+});

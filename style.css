@@ -2,8 +2,7 @@
 /* Navbar Styles */
 #navbar {
     height: 50px;
-    background-color: rgba(0, 0, 0, 0.164);
-    /* 50% transparent black */
+    background-color: rgba(0, 0, 0, 0.25);
     color: white;
     display: flex;
     justify-content: space-between;
@@ -247,6 +246,7 @@ body {
 .map-control-btn:hover {
     background-color: #f4f4f4;
 }
+
 /* Station Coordinates in Sidebar */
 .station-coords {
     font-size: 0.9em;
@@ -254,4 +254,131 @@ body {
     margin-top: -10px;
     margin-bottom: 15px;
     font-weight: normal;
+}
+
+/* Station Image */
+.station-image {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    object-fit: cover;
+    max-height: 250px;
+    /* Prevent it from taking too much vertical space */
+    background-color: #f0f0f0;
+    /* Placeholder color while loading */
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.station-image:hover {
+    opacity: 0.7;
+}
+
+/* Accordion Styles */
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+    padding: 0 5px;
+    /* Add some horizontal padding if needed */
+}
+
+/* Lightbox Styles */
+.lightbox {
+    display: none;
+    /* Hidden by default */
+    position: fixed;
+    /* Stay in place */
+    z-index: 2000;
+    /* Sit on top of everything (sidebar is 1002) */
+    padding-top: 60px;
+    /* Location of the box */
+    left: 0;
+    top: 0;
+    width: 100%;
+    /* Full width */
+    height: 100%;
+    /* Full height */
+    overflow: auto;
+    /* Enable scroll if needed */
+    background-color: rgb(0, 0, 0);
+    /* Fallback color */
+    background-color: rgba(0, 0, 0, 0.9);
+    /* Black w/ opacity */
+}
+
+.lightbox-content {
+    margin: auto;
+    display: block;
+    width: 80%;
+    max-width: 900px;
+    max-height: 80vh;
+    /* Don't exceed screen height too much */
+    object-fit: contain;
+    animation-name: zoom;
+    animation-duration: 0.6s;
+}
+
+@keyframes zoom {
+    from {
+        transform: scale(0)
+    }
+
+    to {
+        transform: scale(1)
+    }
+}
+
+.close-lightbox {
+    position: absolute;
+    top: 15px;
+    right: 35px;
+    color: #f1f1f1;
+    font-size: 40px;
+    font-weight: bold;
+    transition: 0.3s;
+    cursor: pointer;
+}
+
+.close-lightbox:hover,
+.close-lightbox:focus {
+    color: #bbb;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+/* 100% Image Width on Smaller Screens */
+@media only screen and (max-width: 700px) {
+    .lightbox-content {
+        width: 100%;
+    }
+}
+
+/* Status Indicator Dot */
+.status-dot {
+    height: 12px;
+    width: 12px;
+    background-color: #ccc;
+    /* Default/Loading */
+    border-radius: 50%;
+    display: inline-block;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+.status-green {
+    background-color: #28a745;
+    /* Green */
+}
+
+.status-orange {
+    background-color: #ffc107;
+    /* Orange */
+}
+
+.status-red {
+    background-color: #dc3545;
+    /* Red */
 }
