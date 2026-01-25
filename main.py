@@ -5,21 +5,21 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(docs_url="/docs", redoc_url="/redoc")
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000/","http://127.0.0.1:5500","http://localhost:8080/","http://localhost:5500/"],
+    allow_origins=["http://localhost:8000/","http://127.0.0.1:5500","http://localhost:5500/"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-BASE_PATH = "D:\GoaRound\my-first-project\imagetest"
+BASE_PATH = r"Z:/" 
 # BASE_PATH = r"\\192.168.1.254\ftp_access_only\GNSS\pic_stations"
 
-@app.api_route("/api/latest-image/{station_name}", methods=["GET"])
+@app.api_route("/api/latest-image/{station_name}", methods=["GET", "HEAD"])
 async def get_latest_station_image(station_name: str):
     try:
         # 1. หาวันที่ปัจจุบันเพื่อระบุปี (เช่น 2026)
