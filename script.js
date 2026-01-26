@@ -39,7 +39,6 @@ var stations = [
     { name: "RUTI", code: "RUTI", lat: 14.9889, lon: 102.1206 },
     { name: "CPN1", code: "CPN1", lat: 10.7247, lon: 99.3744 },
     { name: "NUO2", code: "NUO2", lat: 17.9383, lon: 102.6261 },
-    { name: "AER1", code: "AER1", lat: 13.6945, lon: 100.7608 },
     { name: "ITC0", code: "ITC0", lat: 11.5705, lon: 104.8994 },
     { name: "HUEV", code: "HUEV", lat: 16.4155, lon: 107.5687 },
     { name: "KKU0", code: "KKU0", lat: 16.4721, lon: 102.8260 }
@@ -67,7 +66,7 @@ function openSidebar(s) {
                 <a href="#" onclick="toggleIonosphere(event)">1. Ionosphere &#9662;</a>
                 <div id="ionosphere-content" class="accordion-content">
                     <br>
-                     <img src="http://localhost:8000/api/latest-image/${s.name}" alt="${s.name} View" class="station-image" onclick="openLightbox(this.src)" onerror="this.parentElement.style.display='none'">
+                     <img src="http://localhost:8000/ionospherebystation/${s.name}/latest.jpg" alt="${s.name} View" class="station-image" onclick="openLightbox(this.src)" onerror="this.parentElement.style.display='none'">
                 </div>
             </li>
         </ul>
@@ -80,36 +79,56 @@ function checkStationStatus(stationName, stationCode) {
     var dot = document.getElementById('status-dot-' + stationCode);
     if (!dot) return;
 
-    // ใช้ IP แทน localhost ถ้าจะเปิดจากเครื่องอื่น
-    var url = `http://localhost:8000/api/latest-image/${stationName}`;
+    // Reset classes to avoid accumulation
+    dot.classList.remove('status-red', 'status-green', 'status-orange');
 
-    fetch(url, { method: 'GET' })
+    // ใช้ IP แทน localhost ถ้าจะเปิดจากเครื่องอื่น หรือใช้ Relative Path ถ้าอยู่บน Server เดียวกัน
+    // กรณีนี้ไฟล์ static อยู่ที่ /ionospherebystation/STATION/latest.jpg
+    // ถ้าใช้ Live Server (port 5500) ก็จะเป็น http://127.0.0.1:5500/ionospherebystation/...
+    // ถ้าใช้ uvicorn (port 8000) ก็จะเป็น http://localhost:8000/ionospherebystation/...
+    // เพื่อความยืดหยุ่น ลองใช้ URL เต็มไปยัง Port 8000 (เพราะเรา mount static ไว้) หรือ Relative ถ้าไฟล์อยู่ที่เดียวกัน
+    // ผู้ใช้บอกว่า "เช็คจากไฟล์ในเครื่อง" -> สมมติว่า frontend/backend รันคู่กัน
+
+    // ลองใช้ URL ของ Backend (Port 8000) เพื่อความแน่นอนเรื่องการอ่านไฟล์ที่ Python สร้าง
+    var url = `http://localhost:8000/ionospherebystation/${stationName}/latest.jpg`;
+    // หรือถ้าอยากลองใช้ Relative Path (กรณี Deploy จริง):
+    // var url = `ionospherebystation/${stationName}/latest.jpg`;
+
+    console.log(`Checking status for ${stationName} at ${url}...`);
+
+    fetch(url, { method: 'GET', cache: 'no-store' }) // Add no-store to prevent caching old image
         .then(response => {
             // 1. กรณีหาไฟล์ไม่เจอ (404 Not Found)
             if (!response.ok) {
+                console.warn(`${stationName}: Response not OK (${response.status})`);
                 dot.classList.add('status-red'); // 🔴 แดง: ไม่มีไฟล์
                 return;
             }
 
             // 2. กรณีเจอไฟล์ (200 OK) 
             var lastModified = response.headers.get('Last-Modified');
+            console.log(`${stationName}: Last-Modified header = ${lastModified}`);
+
             if (lastModified) {
                 var fileDate = new Date(lastModified);
                 var now = new Date();
 
                 // เปรียบเทียบแค่วัน/เดือน/ปี (ตัดเวลาทิ้ง)
                 if (fileDate.toDateString() === now.toDateString()) {
+                    console.log(`${stationName}: Status GREEN (Updated today)`);
                     dot.classList.add('status-green'); // 🟢 เขียว: ปกติ (มาวันนี้)
                 } else {
+                    console.log(`${stationName}: Status ORANGE (Old data: ${fileDate.toDateString()})`);
                     dot.classList.add('status-orange'); // 🟠 ส้ม: ข้อมูลเก่า (ไม่อัปเดต)
                 }
             } else {
+                console.log(`${stationName}: Status GREEN (No Last-Modified header found, assuming OK)`);
                 dot.classList.add('status-green');
             }
         })
         .catch(error => {
-            // 3. กรณีเน็ตหลุด หรือ Server ดับ (จุดที่ต้องแก้!)
-            console.error('Network Error:', error);
+            // 3. กรณีเน็ตหลุด หรือ Server ดับ
+            console.error(`${stationName}: Network Error:`, error);
             dot.classList.add('status-red'); //  แดง: เชื่อมต่อไม่ได้
         });
 }
