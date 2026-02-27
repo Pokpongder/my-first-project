@@ -164,44 +164,51 @@ function openSidebar(s) {
     checkStationStatus(s.name);
 
 
-    // Add Satellite Monitor Button if not exists
-    if (!document.getElementById('sat-monitor-btn')) {
-        var btn = document.createElement('button');
-        btn.id = 'sat-monitor-btn';
-        btn.innerText = 'Satellite Monitor';
-        btn.onclick = function () {
-            openSatelliteMonitor(s.name);
-        };
-        document.getElementById('station-actions-container').appendChild(btn);
-    }
+    // Create Flex Container for Actions
+    var actionContainer = document.getElementById('station-actions-container');
+    actionContainer.style.display = 'flex';
+    actionContainer.style.gap = '8px'; // Space between buttons
 
-    // Add Compare Station Button if not exists
-    if (!document.getElementById('compare-station-btn')) {
-        var btnComp = document.createElement('button');
-        btnComp.id = 'compare-station-btn';
-        btnComp.innerText = 'Compare Station';
-        btnComp.style.marginTop = '10px';
-        btnComp.style.backgroundColor = '#6c757d'; // Grey color
-        btnComp.className = 'compare-btn'; // We can add class for styling if needed, sharing style with sat-monitor-btn
+    // 1. Satellite Monitor Button (Main)
+    var btnSat = document.createElement('button');
+    btnSat.id = 'sat-monitor-btn';
+    btnSat.innerText = 'Satellite Monitor';
+    btnSat.onclick = function () {
+        openSatelliteMonitor(s.name);
+    };
+    // CSS Override for Flex
+    btnSat.style.flex = '4'; // Grows to 4 parts
+    btnSat.style.width = 'auto'; // Reset CSS width: 100%
+    btnSat.style.marginTop = '0'; // Reset CSS margin
 
-        // Copy styles from sat-monitor-btn for consistency
-        btnComp.style.width = '100%';
-        btnComp.style.padding = '10px';
-        btnComp.style.color = 'white';
-        btnComp.style.border = 'none';
-        btnComp.style.borderRadius = '5px';
-        btnComp.style.cursor = 'pointer';
-        btnComp.style.fontSize = '14px';
-        btnComp.style.transition = 'background 0.2s';
+    // 2. Compare Button (Secondary)
+    var btnComp = document.createElement('button');
+    btnComp.id = 'compare-station-btn';
+    btnComp.innerText = 'Compare';
+    btnComp.onclick = function () {
+        openComparisonWizard(s.name);
+    };
 
-        btnComp.onmouseover = function () { this.style.backgroundColor = '#5a6268'; };
-        btnComp.onmouseout = function () { this.style.backgroundColor = '#6c757d'; };
+    // Style to match but grey
+    btnComp.style.flex = '1'; // Grows to 1 part (1/4 of Sat btn)
+    btnComp.style.width = 'auto';
+    btnComp.style.marginTop = '0';
+    btnComp.style.padding = '10px'; // Match padding
+    btnComp.style.backgroundColor = '#6c757d';
+    btnComp.style.color = 'white';
+    btnComp.style.border = 'none';
+    btnComp.style.borderRadius = '5px';
+    btnComp.style.cursor = 'pointer';
+    btnComp.style.fontSize = '14px'; // Match font size
+    btnComp.style.whiteSpace = 'nowrap'; // Prevent text wrapping
+    btnComp.style.overflow = 'hidden';
+    btnComp.style.textOverflow = 'ellipsis'; // Just in case
 
-        btnComp.onclick = function () {
-            openComparisonWizard(s.name);
-        };
-        document.getElementById('station-actions-container').appendChild(btnComp);
-    }
+    btnComp.onmouseover = function () { this.style.backgroundColor = '#5a6268'; };
+    btnComp.onmouseout = function () { this.style.backgroundColor = '#6c757d'; };
+
+    actionContainer.appendChild(btnSat);
+    actionContainer.appendChild(btnComp);
 }
 
 

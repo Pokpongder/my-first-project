@@ -14,14 +14,17 @@ from pyrtcm import RTCMReader
 import json
 import time
 import threading
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 #NTRIP Caster Config 
-NTRIP_CAST = "161.246.18.204"
-NTRIP_PORT = 2101
-NTRIP_USER = "jirapoom"
-NTRIP_PASSWORD = "cssrg"
-NTRIP_TIMEOUT = 5 
+NTRIP_CAST = os.getenv("NTRIP_CAST", "161.246.18.204")
+NTRIP_PORT = int(os.getenv("NTRIP_PORT", 2101))
+NTRIP_USER = os.getenv("NTRIP_USER", "")
+NTRIP_PASSWORD = os.getenv("NTRIP_PASSWORD", "")
+NTRIP_TIMEOUT = int(os.getenv("NTRIP_TIMEOUT", 5))
 
 ALL_MOUNTPOINTS = ["CHMA", "CADT", "KMIT6", "STFD", "RUT1", "CPN1", "NUO2", "ITC0", "HUEV", "KKU0","NKRM", "NKNY", "CHMA", "DPT9", "LPBR", "CHAN", "CNBR", "SISK", "NKSW", "SOKA",
                     "SRTN", "UDON", "SPBR", "UTTD", "PJRK","CM01"]
@@ -102,7 +105,7 @@ origins = ["*"] # Allow all origins for local network access
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Last-Modified"],
@@ -121,36 +124,69 @@ async def get_ntrip_status(mountpoint: str):
 async def get_all_ntrip_status():
     """เช็คสถานะการเชื่อมต่อ RTCM ของทุกสถานีพร้อมกัน"""
     loop = asyncio.get_event_loop()
+    tasks = [loop.run_in_executor(None, check_ntrip_mountpoint, mp) for mp in ALL_MOUNTPOINTS]
+    results = await asyncio.gather(*tasks)
     statuses = {mp: status for mp, status in zip(ALL_MOUNTPOINTS, results)}
     return JSONResponse(statuses)
 
 
-# --- WebSocket for Satellite Monitoring ---
-@app.websocket("/ws/sat-data/{mountpoint}")
-async def websocket_endpoint(websocket: WebSocket, mountpoint: str):
-    await websocket.accept()
-    print(f"[WS] Client connected to monitor {mountpoint}")
+# --- WebSocket for Satellite Monitoring (Broadcaster Pattern) ---
+class SatelliteMonitorManager:
+    def __init__(self, mountpoint: str):
+        self.mountpoint = mountpoint
+        self.active_wevbsockets: list[WebSocket] = []
+        self.stats = {
+            "GPS": 0, "GLONASS": 0, "Galileo": 0, "BeiDou": 0,
+            "connected": False,
+            "error": None
+        }
+        self.stop_event = threading.Event()
+        self.thread = None
 
-    # Shared State
-    stats = {
-        "GPS": 0, "GLONASS": 0, "Galileo": 0, "BeiDou": 0,
-        "connected": False,
-        "error": None
-    }
-    stop_event = threading.Event()
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_wevbsockets.append(websocket)
+        print(f"[Broadcaster] Client connected to {self.mountpoint}. Total clients: {len(self.active_wevbsockets)}")
 
-    def read_ntrip_stream():
+        # Start the background thread if it's the first connection
+        if len(self.active_wevbsockets) == 1:
+            self.stop_event.clear()
+            self.stats["error"] = None
+            self.thread = threading.Thread(target=self._start_reading_ntrip, daemon=True)
+            self.thread.start()
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_wevbsockets:
+            self.active_wevbsockets.remove(websocket)
+        print(f"[Broadcaster] Client disconnected from {self.mountpoint}. Total clients: {len(self.active_wevbsockets)}")
+
+        # Stop the background thread if no clients are listening
+        if len(self.active_wevbsockets) == 0:
+            self.stop_event.set()
+            if self.thread:
+                self.thread.join(timeout=2)
+                self.thread = None
+            print(f"[Broadcaster] Shutting down connection for {self.mountpoint}")
+
+    async def broadcast(self, data: dict):
+        for ws in self.active_wevbsockets:
+            try:
+                await ws.send_json(data)
+            except Exception as e:
+                print(f"[Broadcaster] Error sending to a client: {e}")
+                # Do not immediately disconnect here, wait for WebSocketDisconnect
+
+    def _start_reading_ntrip(self):
         sock = None
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(10)
             sock.connect((NTRIP_CAST, NTRIP_PORT))
             
-            # Login
             auth_str = f"{NTRIP_USER}:{NTRIP_PASSWORD}"
             auth_b64 = base64.b64encode(auth_str.encode()).decode()
             headers = (
-                f"GET /{mountpoint} HTTP/1.0\r\n"
+                f"GET /{self.mountpoint} HTTP/1.0\r\n"
                 f"User-Agent: NTRIP Python Monitor\r\n"
                 f"Authorization: Basic {auth_b64}\r\n"
                 f"Accept: */*\r\n"
@@ -159,9 +195,8 @@ async def websocket_endpoint(websocket: WebSocket, mountpoint: str):
             )
             sock.sendall(headers.encode())
 
-            # Read Header
             response = b""
-            while not stop_event.is_set():
+            while not self.stop_event.is_set():
                 chunk = sock.recv(1)
                 if not chunk: break
                 response += chunk
@@ -169,66 +204,80 @@ async def websocket_endpoint(websocket: WebSocket, mountpoint: str):
             
             header_str = response.decode(errors='ignore')
             if "200 OK" not in header_str:
-                stats["error"] = f"Connection failed: {header_str.strip()}"
+                self.stats["error"] = f"Connection failed: {header_str.strip()}"
                 return
 
-            stats["connected"] = True
-            print(f"[Thread] {mountpoint} Connected!")
+            self.stats["connected"] = True
+            print(f"[Broadcaster Thread] {self.mountpoint} Connected!")
 
-            # Read RTCM
             ntrip_reader = RTCMReader(sock)
-            
             for (raw_data, parsed_data) in ntrip_reader:
-                if stop_event.is_set(): break
-                
+                if self.stop_event.is_set(): break
                 if parsed_data:
                     msg_id = parsed_data.identity
-                    if msg_id == "1077": stats["GPS"] = bin(parsed_data.DF394).count('1')
-                    elif msg_id == "1087": stats["GLONASS"] = bin(parsed_data.DF394).count('1')
-                    elif msg_id == "1097": stats["Galileo"] = bin(parsed_data.DF394).count('1')
-                    elif msg_id == "1127": stats["BeiDou"] = bin(parsed_data.DF394).count('1')
+                    if msg_id == "1077": self.stats["GPS"] = bin(parsed_data.DF394).count('1')
+                    elif msg_id == "1087": self.stats["GLONASS"] = bin(parsed_data.DF394).count('1')
+                    elif msg_id == "1097": self.stats["Galileo"] = bin(parsed_data.DF394).count('1')
+                    elif msg_id == "1127": self.stats["BeiDou"] = bin(parsed_data.DF394).count('1')
 
         except Exception as e:
-            print(f"[Thread] Error: {e}")
-            stats["error"] = str(e)
+            print(f"[Broadcaster Thread] Error for {self.mountpoint}: {e}")
+            self.stats["error"] = str(e)
         finally:
             if sock: sock.close()
-            print(f"[Thread] {mountpoint} Stopped.")
+            self.stats["connected"] = False
+            print(f"[Broadcaster Thread] {self.mountpoint} Stopped.")
 
-    # Start Background Thread
-    thread = threading.Thread(target=read_ntrip_stream, daemon=True)
-    thread.start()
+active_monitors: dict[str, SatelliteMonitorManager] = {}
+
+@app.websocket("/ws/sat-data/{mountpoint}")
+async def websocket_endpoint(websocket: WebSocket, mountpoint: str):
+    if mountpoint not in active_monitors:
+        active_monitors[mountpoint] = SatelliteMonitorManager(mountpoint)
+    
+    manager = active_monitors[mountpoint]
+    await manager.connect(websocket)
 
     try:
-        # Wait for connection
-        for _ in range(10): # Wait up to 10s
-            if stats["connected"] or stats["error"]: break
+        # Wait up to 10s for the background thread to connect
+        for _ in range(10):
+            if manager.stats["connected"] or manager.stats["error"]: break
             await asyncio.sleep(1)
         
-        if stats["error"]:
-            await websocket.send_json({"error": stats["error"]})
-            return
-        
-        if not stats["connected"]:
+        if manager.stats["error"]:
+            await websocket.send_json({"error": manager.stats["error"]})
+            # Do not return here, we still want to gracefully handle disconnect
+        elif not manager.stats["connected"]:
             await websocket.send_json({"error": "Timeout connecting to NTRIP Caster"})
-            return
+        else:
+            await websocket.send_json({"status": "connected", "message": f"Monitoring {mountpoint}..."})
 
-        await websocket.send_json({"status": "connected", "message": f"Monitoring {mountpoint}..."})
-
-        # Main Loop: Send Data every 1 second
+        # Keep connection alive while broadcasting data handling happens via another task
+        # Actually, in FastAPI, one websocket connection loop is typical.
+        # So we create a tight loop here to poll the `manager.stats` every 1 second
+        # If the manager is running, it will update stats.
+        last_sent_time = None
         while True:
-            await asyncio.sleep(1) # Exact 1 second interval
+            await asyncio.sleep(1)
             
-            data = {
-                "time": datetime.now().strftime("%H:%M:%S"),
-                "sats": {k: v for k, v in stats.items() if k in ["GPS", "GLONASS", "Galileo", "BeiDou"]}
-            }
-            await websocket.send_json(data)
+            # If an error happens while running
+            if manager.stats["error"]:
+                await websocket.send_json({"error": manager.stats["error"]})
+                break
+
+            current_time = datetime.now().strftime("%H:%M:%S")
+            if current_time != last_sent_time:
+                last_sent_time = current_time
+                data = {
+                    "time": current_time,
+                    "sats": {k: v for k, v in manager.stats.items() if k in ["GPS", "GLONASS", "Galileo", "BeiDou"]}
+                }
+                await websocket.send_json(data)
 
     except WebSocketDisconnect:
-        print(f"[WS] Client disconnected from {mountpoint}")
+        manager.disconnect(websocket)
     except Exception as e:
-        print(f"[WS] Error: {e}")
-    finally:
-        stop_event.set()
-        thread.join(timeout=2)
+        print(f"[WS] Exception for {mountpoint}: {e}")
+        manager.disconnect(websocket)
+
+
